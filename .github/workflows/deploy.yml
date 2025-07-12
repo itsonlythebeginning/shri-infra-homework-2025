@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Release version to deploy (e.g., 1, 2)'
+        description: 'Release version to deploy (e.g., 1, 2, 3)'
         required: true
 
 jobs:
@@ -14,7 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+      contents: read # Добавили права на чтение для checkout
     steps:
+      # --- ВОТ ЭТОТ ШАГ НУЖНО ДОБАВИТЬ ---
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+
       - name: Deploy to VM via SSH
         uses: appleboy/ssh-action@master
         with:
@@ -24,14 +30,14 @@ jobs:
           script: |
             # Логинимся в Yandex CR на сервере
             echo '${{ secrets.YC_SA_JSON_CREDENTIALS }}' | docker login --username json_key --password-stdin cr.yandex
-
+            
             # Останавливаем и удаляем старый контейнер, если он есть
             docker stop my-app || true
             docker rm my-app || true
-
+            
             # Скачиваем указанный образ (используем latest для простоты)
             docker pull cr.yandex/${{ secrets.YC_REGISTRY_ID }}/app:latest
-
+            
             # Запускаем новый контейнер
             docker run -d -p 80:3000 --name my-app --restart always cr.yandex/${{ secrets.YC_REGISTRY_ID }}/app:latest
 
@@ -48,6 +54,6 @@ jobs:
               --body "✅ **Deployment Successful!**
 
               Release **${{ github.event.inputs.release_version }}** was deployed to production by @${{ github.actor }}.
-
+          
               Application is live at: http://${{ secrets.VM_HOST }}"
           fi
