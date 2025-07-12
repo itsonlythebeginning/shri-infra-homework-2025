@@ -1,0 +1,81 @@
+# .github/workflows/hotfix.yml
+name: Create Hotfix
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'The release version to fix (e.g., 1, 2, 3)'
+        required: true
+
+env:
+  REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
+  IMAGE_NAME: app
+
+jobs:
+  create-hotfix:
+    name: Create Hotfix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - name: Checkout release branch
+        # Важно: работаем в ветке того релиза, который чиним
+        uses: actions/checkout@v4
+        with:
+          ref: 'releases/v${{ github.event.inputs.release_version }}'
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Run tests
+        run: npm ci && npm run test
+
+      - name: Set Fix Version
+        run: echo "FIX_VERSION=${{ github.run_number }}" >> $GITHUB_ENV
+
+      - name: Login to Yandex Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: cr.yandex
+          username: json_key
+          password: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+
+      - name: Build and Push Hotfix Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            cr.yandex/${{ env.REGISTRY_ID }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.release_version }}_fix${{ env.FIX_VERSION }}
+            cr.yandex/${{ env.REGISTRY_ID }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Create Git Tag for Hotfix
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@github.com"
+          git tag "v${{ github.event.inputs.release_version }}_fix${{ env.FIX_VERSION }}"
+          git push origin --tags
+
+      - name: Find Release Issue and Add Comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Ищем нужную Issue по названию
+          ISSUE_NUMBER=$(gh issue list --search "in:title Release v${{ github.event.inputs.release_version }}" --json number -q '.[0].number')
+          if [ -z "$ISSUE_NUMBER" ]; then
+            echo "Could not find an issue for release v${{ github.event.inputs.release_version }}"
+            exit 1
+          fi
+          # Добавляем комментарий о фиксе
+          gh issue comment $ISSUE_NUMBER \
+            --body "### 🔥 Hotfix Applied
+
+            **Date:** $(date -u)
+            **Author:** @${{ github.actor }}
+            **New Docker Image:** \`cr.yandex/${{ env.REGISTRY_ID }}/${{ env.IMAGE_NAME }}:${{ github.event.inputs.release_version }}_fix${{ env.FIX_VERSION }}\`"
