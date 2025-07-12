@@ -50,12 +50,15 @@ jobs:
       - name: Create GitHub Issue for Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue create \
-            --title "🚀 Release ${{ env.RELEASE_VERSION }} Ready for Deployment" \
-            --body "Release **${{ env.RELEASE_VERSION }}** was successfully built and published by @${{ github.actor }}.
+          # Помещаем тело Issue в переменную, чтобы избежать проблем с синтаксисом
+          ISSUE_BODY: |
+            Release **${{ env.RELEASE_VERSION }}** was successfully built and published by @${{ github.actor }}.
 
             - **Version Tag:** `${{ env.RELEASE_VERSION }}`
             - **Docker Image:** `cr.yandex/${{ env.REGISTRY_ID }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}`
 
-            Ready to be deployed to production."
+            Ready to be deployed to production.
+        run: |
+          gh issue create \
+            --title "🚀 Release ${{ env.RELEASE_VERSION }} Ready for Deployment" \
+            --body "$ISSUE_BODY"
