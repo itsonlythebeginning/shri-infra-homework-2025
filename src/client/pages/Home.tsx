@@ -10,7 +10,7 @@ export const Home: React.FC = () => {
       <Helmet title="Welcome" />
       <div className="row">
         <div className="col bg-orange text-white py-4 bg-opacity-75">
-          <p className="display-3">Welcome to Kogtetochka store!</p>
+          <p className="display-3">Welcome to Kogtetochka store!!!!!!</p>
           <p className="lead">
             We have a large assortment of scratching posts!
           </p>
