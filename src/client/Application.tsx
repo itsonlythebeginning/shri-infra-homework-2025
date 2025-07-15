@@ -13,6 +13,7 @@ import { About } from './pages/About';
 import { useSelector } from 'react-redux';
 import { ApplicationState } from './store';
 
+
 const bem = cn('Application');
 
 export const Application: FC = () => {
