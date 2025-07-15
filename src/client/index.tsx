@@ -10,6 +10,7 @@ import { initStore } from './store';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './index.css';
 
+
 const basename = '/hw/store';
 
 const api = new ExampleApi(basename);
