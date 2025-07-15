@@ -2,7 +2,7 @@
 name: Create Release
 
 on:
-  workflow_dispatch: # Ручной запуск
+  workflow_dispatch:
 
 env:
   REGISTRY_ID: ${{ secrets.YC_REGISTRY_ID }}
@@ -17,7 +17,10 @@ jobs:
       issues: write
     steps:
       - name: Checkout code
+        # fetch-depth: 0 нужен, чтобы получить всю историю для тегов и логов
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -30,6 +33,43 @@ jobs:
 
       - name: Set Release Version
         run: echo "RELEASE_VERSION=${{ github.run_number }}" >> $GITHUB_ENV
+
+      # --- НОВЫЕ ШАГИ ---
+
+      - name: Create Git Tag for Release
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@github.com"
+          git tag "v${{ env.RELEASE_VERSION }}"
+          git push origin "v${{ env.RELEASE_VERSION }}"
+
+      - name: Create Release Branch
+        run: |
+          git checkout -b "releases/v${{ env.RELEASE_VERSION }}"
+          git push origin "releases/v${{ env.RELEASE_VERSION }}"
+
+      - name: Get Commit List
+        id: get_commits
+        run: |
+          # Находим самый последний тег в истории
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --max-count=1) || echo "")
+          # Формируем красивый список коммитов от того тега до текущего момента
+          COMMIT_LOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h) by @%an")
+          # Сохраняем многострочный лог в переменную для следующих шагов
+          echo "COMMIT_LOG<<EOF" >> $GITHUB_ENV
+          echo "$COMMIT_LOG" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Update CHANGELOG.md
+        run: |
+          # Дописываем новую информацию в НАЧАЛО файла
+          echo -e "## v${{ env.RELEASE_VERSION }} - $(date +'%Y-%m-%d')\n\n${{ env.COMMIT_LOG }}\n\n---\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
+          git add CHANGELOG.md
+          git commit -m "docs: update CHANGELOG.md for v${{ env.RELEASE_VERSION }}"
+          # Пушим изменения в созданную релизную ветку
+          git push origin "releases/v${{ env.RELEASE_VERSION }}"
+
+      # --- КОНЕЦ НОВЫХ ШАГОВ ---
 
       - name: Login to Yandex Container Registry
         uses: docker/login-action@v3
@@ -50,12 +90,16 @@ jobs:
       - name: Create GitHub Issue for Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_BODY: |
+            ## 🚀 Release v${{ env.RELEASE_VERSION }}
+            **Date:** $(date -u)
+            **Author:** @${{ github.actor }}
+            **Version:** `${{ env.RELEASE_VERSION }}`
+            **Docker Image:** `cr.yandex/${{ env.REGISTRY_ID }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}`
+            
+            ### Commits in this release:
+            ${{ env.COMMIT_LOG }}
         run: |
           gh issue create \
-            --title "🚀 Release ${{ env.RELEASE_VERSION }} Ready for Deployment" \
-            --body "Release **${{ env.RELEASE_VERSION }}** was successfully built and published by @${{ github.actor }}.
-
-            - **Version Tag:** `${{ env.RELEASE_VERSION }}`
-            - **Docker Image:** `cr.yandex/${{ env.REGISTRY_ID }}/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}`
-
-            Ready to be deployed to production."
+            --title "🚀 Release v${{ env.RELEASE_VERSION }} Ready for Deployment" \
+            --body "$ISSUE_BODY"

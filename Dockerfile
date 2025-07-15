@@ -1,17 +1,24 @@
-# Этап 1: Сборка проекта с Node.js 20
-FROM node:20-alpine AS builder
+
+# Используем полный образ Node.js для лучшей совместимости с инструментами разработки.
+FROM node:20
+
+# Устанавливаем рабочую директорию
 WORKDIR /app
+
+# Копируем файлы с зависимостями
 COPY package*.json ./
+
+# Устанавливаем ВСЕ зависимости, включая devDependencies, так как они нужны для запуска nodemon
 RUN npm ci
+
+# Копируем весь остальной код проекта
 COPY . .
+
+# Если в скрипте `build` есть сборка клиента, запускаем её
 RUN npm run build
 
-# Этап 2: Финальный образ для запуска на Node.js 20
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
-COPY --from=builder /app/build ./build
-COPY --from=builder /app/server ./server
+# Открываем порт
 EXPOSE 3000
+
+# Запускаем команду "start" из твоего package.json
 CMD ["npm", "start"]
